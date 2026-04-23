@@ -5,6 +5,7 @@ import os.path as osp
 from mmengine.config import Config, DictAction
 from mmengine.runner import Runner
 from mmdet.utils import register_all_modules
+import mmcv_custom.register_backbone
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
