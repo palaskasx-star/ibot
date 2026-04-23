@@ -8,7 +8,7 @@
 Copy-paste from mmcv library:
 https://github.com/open-mmlab/mmcv/
 """
-"""
+'''
 import io
 import os
 import os.path as osp
@@ -626,4 +626,4 @@ def save_checkpoint(model, filename, optimizer=None, meta=None):
         with open(filename, 'wb') as f:
             torch.save(checkpoint, f)
             f.flush()
-"""
+'''
