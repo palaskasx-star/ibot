@@ -19,13 +19,15 @@ _base_ = [
 
 model = dict(
     backbone=dict(
-        embed_dim=768,
-        depth=12,
-        num_heads=12,
-        mlp_ratio=4.,
-        drop_path_rate=0.2, #see if 0.1 larger than vit-small is better
+        _delete_=True,                         # Overwrite the inherited base config
+        type='TimmViTWithFPN',                 # Our new custom wrapper class
+        model_name='vit_base_patch16_224',     # The timm registry name for ViT-Base
+        pretrained=True,                       # Download standard weights
+        with_fpn=True,
+        out_indices=[3, 5, 7, 11],
+        drop_path_rate=0.2,                    # Keep this! Stochastic depth helps training
     ),
-    neck=dict(in_channels=[768, 768, 768, 768]),
+    neck=dict(in_channels=[768, 768, 768, 768]), # Keep this (ViT-Base outputs 768 dim)
     roi_head=dict(
         bbox_head=[
             dict(
