@@ -35,3 +35,4 @@ resume = False # Replaces resume_from logic
 
 # workflow = [('train', 1)] is deprecated. 
 # Training loops are now defined in the main config (train_cfg).
+default_scope = 'mmdet'
