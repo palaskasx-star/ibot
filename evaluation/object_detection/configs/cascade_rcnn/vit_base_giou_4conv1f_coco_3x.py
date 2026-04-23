@@ -1,155 +1,80 @@
-# Copyright (c) ByteDance, Inc. and its affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
-"""
-Mostly copy-paste from timm, mmdet, and swin code bases
-https://github.com/rwightman/pytorch-image-models/tree/master/timm
-https://github.com/open-mmlab/mmdetection
-https://github.com/SwinTransformer/Swin-Transformer-Object-Detection
-"""
-
 _base_ = [
     '../_base_/models/cascade_mask_rcnn_vit_fpn.py',
     '../_base_/datasets/coco_instance.py',
-    '../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py'
+    '../_base_/default_runtime.py'
 ]
 
+# 1. Model Overwrites
 model = dict(
     backbone=dict(
-        _delete_=True,                         # Overwrite the inherited base config
-        type='TimmViTWithFPN',                 # Our new custom wrapper class
-        model_name='vit_base_patch16_224',     # The timm registry name for ViT-Base
-        pretrained=True,                       # Download standard weights
+        _delete_=True,
+        type='TimmViTWithFPN', # Ensure your custom class is registered in MMDet 3.x registry
+        model_name='vit_base_patch16_224',
+        pretrained=True,
         with_fpn=True,
         out_indices=[3, 5, 7, 11],
-        drop_path_rate=0.2,                    # Keep this! Stochastic depth helps training
-    ),
-    neck=dict(in_channels=[768, 768, 768, 768]), # Keep this (ViT-Base outputs 768 dim)
+        drop_path_rate=0.2),
+    neck=dict(in_channels=[768, 768, 768, 768]),
     roi_head=dict(
         bbox_head=[
             dict(
                 type='ConvFCBBoxHead',
                 num_shared_convs=4,
                 num_shared_fcs=1,
-                in_channels=256,
-                conv_out_channels=256,
-                fc_out_channels=1024,
-                roi_feat_size=7,
-                num_classes=80,
-                bbox_coder=dict(
-                    type='DeltaXYWHBBoxCoder',
-                    target_means=[0., 0., 0., 0.],
-                    target_stds=[0.1, 0.1, 0.2, 0.2]),
-                reg_class_agnostic=False,
                 reg_decoded_bbox=True,
-                norm_cfg=dict(type='SyncBN', requires_grad=True),
-                loss_cls=dict(
-                    type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
                 loss_bbox=dict(type='GIoULoss', loss_weight=10.0)),
             dict(
                 type='ConvFCBBoxHead',
                 num_shared_convs=4,
                 num_shared_fcs=1,
-                in_channels=256,
-                conv_out_channels=256,
-                fc_out_channels=1024,
-                roi_feat_size=7,
-                num_classes=80,
-                bbox_coder=dict(
-                    type='DeltaXYWHBBoxCoder',
-                    target_means=[0., 0., 0., 0.],
-                    target_stds=[0.05, 0.05, 0.1, 0.1]),
-                reg_class_agnostic=False,
                 reg_decoded_bbox=True,
-                norm_cfg=dict(type='SyncBN', requires_grad=True),
-                loss_cls=dict(
-                    type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
                 loss_bbox=dict(type='GIoULoss', loss_weight=10.0)),
             dict(
                 type='ConvFCBBoxHead',
                 num_shared_convs=4,
                 num_shared_fcs=1,
-                in_channels=256,
-                conv_out_channels=256,
-                fc_out_channels=1024,
-                roi_feat_size=7,
-                num_classes=80,
-                bbox_coder=dict(
-                    type='DeltaXYWHBBoxCoder',
-                    target_means=[0., 0., 0., 0.],
-                    target_stds=[0.033, 0.033, 0.067, 0.067]),
-                reg_class_agnostic=False,
                 reg_decoded_bbox=True,
-                norm_cfg=dict(type='SyncBN', requires_grad=True),
-                loss_cls=dict(
-                    type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
                 loss_bbox=dict(type='GIoULoss', loss_weight=10.0))
-        ]))
+        ])
+)
 
-img_norm_cfg = dict(
-    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
-
-# augmentation strategy originates from DETR / Sparse RCNN
+# 2. Pipeline Update (Using the new AutoAugment syntax)
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
-    dict(type='RandomFlip', flip_ratio=0.5),
+    dict(type='RandomFlip', prob=0.5),
     dict(type='AutoAugment',
          policies=[
+             [dict(type='Resize', scale=[(480, 1333), (800, 1333)], multiscale_mode='range', keep_ratio=True)],
              [
-                 dict(type='Resize',
-                      img_scale=[(480, 1333), (512, 1333), (544, 1333), (576, 1333),
-                                 (608, 1333), (640, 1333), (672, 1333), (704, 1333),
-                                 (736, 1333), (768, 1333), (800, 1333)],
-                      multiscale_mode='value',
-                      keep_ratio=True)
-             ],
-             [
-                 dict(type='Resize',
-                      img_scale=[(400, 1333), (500, 1333), (600, 1333)],
-                      multiscale_mode='value',
-                      keep_ratio=True),
-                 dict(type='RandomCrop',
-                      crop_type='absolute_range',
-                      crop_size=(384, 600),
-                      allow_negative_crop=True),
-                 dict(type='Resize',
-                      img_scale=[(480, 1333), (512, 1333), (544, 1333),
-                                 (576, 1333), (608, 1333), (640, 1333),
-                                 (672, 1333), (704, 1333), (736, 1333),
-                                 (768, 1333), (800, 1333)],
-                      multiscale_mode='value',
-                      override=True,
-                      keep_ratio=True)
+                 dict(type='Resize', scale=[(400, 1333), (600, 1333)], multiscale_mode='range', keep_ratio=True),
+                 dict(type='RandomCrop', crop_type='absolute_range', crop_size=(384, 600), allow_negative_crop=True),
+                 dict(type='Resize', scale=[(480, 1333), (800, 1333)], multiscale_mode='range', keep_ratio=True)
              ]
          ]),
-    dict(type='Normalize', **img_norm_cfg),
-    dict(type='Pad', size_divisor=32),
-    dict(type='DefaultFormatBundle'),
-    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks']),
+    dict(type='PackDetInputs')
 ]
-data = dict(train=dict(pipeline=train_pipeline))
+train_dataloader = dict(dataset=dict(pipeline=train_pipeline))
 
-# optimizer = dict(_delete_=True, type='AdamW', lr=0.0001, betas=(0.9, 0.999), weight_decay=0.05,
-#                  paramwise_cfg=dict(custom_keys={'absolute_pos_embed': dict(decay_mult=0.),
-#                                                  'norm': dict(decay_mult=0.)}))
-optimizer = dict(_delete_=True, type='AdamW', lr=0.0001, betas=(0.9, 0.999), weight_decay=0.05,
-                 constructor='LayerDecayOptimizerConstructor', 
-                 paramwise_cfg=dict(num_layers=12, layer_decay_rate=0.65))
-
-lr_config = dict(step=[27, 33])
-runner = dict(type='EpochBasedRunnerAmp', max_epochs=36)
-
-# do not use mmdet version fp16
-fp16 = None
-optimizer_config = dict(
-    type="DistOptimizerHook",
-    update_interval=1,
-    grad_clip=None,
-    coalesce=True,
-    bucket_size_mb=-1,
-    use_fp16=True,
+# 3. Optimizer & Layer Decay (The 3.x way)
+optim_wrapper = dict(
+    type='AmpOptimWrapper', # Replaces EpochBasedRunnerAmp + use_fp16=True
+    optimizer=dict(
+        type='AdamW', 
+        lr=0.0001, 
+        betas=(0.9, 0.999), 
+        weight_decay=0.05),
+    constructor='LayerDecayOptimizerConstructor',
+    paramwise_cfg=dict(num_layers=12, layer_decay_rate=0.65)
 )
+
+# 4. Learning Rate Scheduler (Replacing lr_config)
+param_scheduler = [
+    dict(type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=500), # Warmup
+    dict(type='MultiStepLR', begin=0, end=36, by_epoch=True, milestones=[27, 33], gamma=0.1)
+]
+
+# 5. Runner Loops (Replacing workflow/runner)
+train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=36, val_interval=1)
+val_cfg = dict(type='ValLoop')
+test_cfg = dict(type='TestLoop')
