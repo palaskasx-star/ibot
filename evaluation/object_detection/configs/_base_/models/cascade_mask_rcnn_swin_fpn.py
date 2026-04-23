@@ -1,23 +1,30 @@
 # model settings
 model = dict(
     type='CascadeRCNN',
-    pretrained=None,
+    # NEW: Data preprocessor handles normalization and padding
+    data_preprocessor=dict(
+        type='DetDataPreprocessor',
+        mean=[123.675, 116.28, 103.53],
+        std=[58.395, 57.12, 57.375],
+        bgr_to_rgb=True,
+        pad_size_divisor=32),
     backbone=dict(
-        type='SwinTransformer',
+        type='SwinTransformer', # Ensure this is registered in MMDet 3.x
         embed_dim=96,
         depths=[2, 2, 6, 2],
         num_heads=[3, 6, 12, 24],
         window_size=7,
         mlp_ratio=4.,
         qkv_bias=True,
-        qk_scale=None,
+        # qk_scale is often deprecated/removed in newer versions, check if needed
         drop_rate=0.,
         attn_drop_rate=0.,
         drop_path_rate=0.2,
         ape=False,
         patch_norm=True,
         out_indices=(0, 1, 2, 3),
-        use_checkpoint=False),
+        use_checkpoint=False,
+        init_cfg=None), # Use init_cfg for pre-trained weights
     neck=dict(
         type='FPN',
         in_channels=[96, 192, 384, 768],
@@ -113,7 +120,7 @@ model = dict(
             num_classes=80,
             loss_mask=dict(
                 type='CrossEntropyLoss', use_mask=True, loss_weight=1.0))),
-    # model training and testing settings
+    # train_cfg and test_cfg stay logically similar but move under 'model'
     train_cfg = dict(
         rpn=dict(
             assigner=dict(
@@ -133,7 +140,6 @@ model = dict(
             pos_weight=-1,
             debug=False),
         rpn_proposal=dict(
-            nms_across_levels=False,
             nms_pre=2000,
             nms_post=2000,
             max_per_img=2000,
@@ -194,7 +200,6 @@ model = dict(
         ]),
     test_cfg = dict(
         rpn=dict(
-            nms_across_levels=False,
             nms_pre=1000,
             nms_post=1000,
             max_per_img=1000,
