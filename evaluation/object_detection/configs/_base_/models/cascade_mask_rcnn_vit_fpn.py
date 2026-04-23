@@ -1,7 +1,12 @@
-# model settings
 model = dict(
     type='CascadeRCNN',
-    pretrained=None,
+    # 1. Data Preprocessor: Moved from pipeline to model
+    data_preprocessor=dict(
+        type='DetDataPreprocessor',
+        mean=[123.675, 116.28, 103.53],
+        std=[58.395, 57.12, 57.375],
+        bgr_to_rgb=True,
+        pad_size_divisor=32),
     backbone=dict(
         type='VisionTransformer',
         img_size=[672, 1092],
@@ -13,7 +18,9 @@ model = dict(
         qkv_bias=True,
         drop_path_rate=0.1,
         out_indices=(3, 5, 7, 11),
-        use_checkpoint=False),
+        use_checkpoint=False,
+        # 2. Initialization: Weights are now defined here
+        init_cfg=dict(type='Pretrained', checkpoint='path/to/your/vit_model.pth')),
     neck=dict(
         type='FPN',
         in_channels=[384, 384, 384, 384],
@@ -60,8 +67,7 @@ model = dict(
                     type='CrossEntropyLoss',
                     use_sigmoid=False,
                     loss_weight=1.0),
-                loss_bbox=dict(type='SmoothL1Loss', beta=1.0,
-                               loss_weight=1.0)),
+                loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
             dict(
                 type='Shared2FCBBoxHead',
                 in_channels=256,
@@ -77,8 +83,7 @@ model = dict(
                     type='CrossEntropyLoss',
                     use_sigmoid=False,
                     loss_weight=1.0),
-                loss_bbox=dict(type='SmoothL1Loss', beta=1.0,
-                               loss_weight=1.0)),
+                loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
             dict(
                 type='Shared2FCBBoxHead',
                 in_channels=256,
@@ -109,8 +114,8 @@ model = dict(
             num_classes=80,
             loss_mask=dict(
                 type='CrossEntropyLoss', use_mask=True, loss_weight=1.0))),
-    # model training and testing settings
-    train_cfg = dict(
+    # 3. Training/Testing CFG: Now nested inside model
+    train_cfg=dict(
         rpn=dict(
             assigner=dict(
                 type='MaxIoUAssigner',
@@ -129,7 +134,6 @@ model = dict(
             pos_weight=-1,
             debug=False),
         rpn_proposal=dict(
-            nms_across_levels=False,
             nms_pre=2000,
             nms_post=2000,
             max_per_img=2000,
@@ -188,9 +192,8 @@ model = dict(
                 pos_weight=-1,
                 debug=False)
         ]),
-    test_cfg = dict(
+    test_cfg=dict(
         rpn=dict(
-            nms_across_levels=False,
             nms_pre=1000,
             nms_post=1000,
             max_per_img=1000,
