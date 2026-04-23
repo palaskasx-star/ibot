@@ -32,6 +32,8 @@ class TimmViTWithFPN(BaseModule):
             dynamic_img_size=True, 
             **kwargs
         )
+
+        self.vit.num_classes = 80
         
         self.patch_size = self.vit.patch_embed.patch_size[0]
         embed_dim = self.vit.embed_dim
