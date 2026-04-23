@@ -75,11 +75,23 @@ class TimmViTWithFPN(BaseModule):
         
         # We use timm's internal methods to handle the embeddings
         x = self.vit.patch_embed(x)
-        x = self.vit._pos_embed(x)
         
+        # --- FIX 2: Handle DINOv3 / EVA tuple returns (x, rope) ---
+        pos_embed_out = self.vit._pos_embed(x)
+        if isinstance(pos_embed_out, tuple):
+            x, rope = pos_embed_out
+        else:
+            x = pos_embed_out
+            rope = None
+            
         features = []
         for i, blk in enumerate(self.vit.blocks):
-            x = blk(x)
+            # --- FIX 3: Pass rope to block if it exists ---
+            if rope is not None:
+                x = blk(x, rope=rope)
+            else:
+                x = blk(x)
+                
             if i in self.out_indices:
                 num_prefix = self.vit.num_prefix_tokens
                 xp = x[:, num_prefix:, :]
