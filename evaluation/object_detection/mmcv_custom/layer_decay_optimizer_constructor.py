@@ -1,95 +1,69 @@
-# Copyright (c) ByteDance, Inc. and its affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
-"""
-Mostly copy-paste from BEiT library:
-https://github.com/microsoft/unilm/blob/master/beit/semantic_segmentation/mmcv_custom/layer_decay_optimizer_constructor.py
-"""
-
 import json
-
-from mmcv.runner import OPTIMIZER_BUILDERS, DefaultOptimizerConstructor
-from mmcv.runner import get_dist_info
+from mmdet.registry import OPTIM_WRAPPER_CONSTRUCTORS
+from mmengine.optim import DefaultOptimWrapperConstructor
+from mmengine.dist import get_dist_info
 
 def get_num_layer_for_vit(var_name, num_max_layer):
-    if var_name in ("backbone.cls_token", "backbone.mask_token", "backbone.pos_embed"):
+    # Adjusting strings to match the "self.vit" wrapper from our previous Backbone class
+    if var_name in ("backbone.vit.cls_token", "backbone.vit.pos_embed", "backbone.vit.mask_token"):
         return 0
-    elif var_name.startswith("backbone.patch_embed"):
+    elif "backbone.vit.patch_embed" in var_name:
         return 0
-    elif var_name.startswith("backbone.blocks"):
-        layer_id = int(var_name.split('.')[2])
+    elif "backbone.vit.blocks" in var_name:
+        # Expected format: backbone.vit.blocks.0.norm1.weight
+        layer_id = int(var_name.split('vit.blocks.')[1].split('.')[0])
         return layer_id + 1
     else:
+        # For the Neck (FPN) and ROI Heads
         return num_max_layer - 1
 
-
-@OPTIMIZER_BUILDERS.register_module()
-class LayerDecayOptimizerConstructor(DefaultOptimizerConstructor):
+@OPTIM_WRAPPER_CONSTRUCTORS.register_module()
+class LayerDecayOptimizerConstructor(DefaultOptimWrapperConstructor):
     def add_params(self, params, module, prefix='', is_dcn_module=None):
-        """Add all parameters of module to the params list.
-        The parameters of the given module will be added to the list of param
-        groups, with specific rules defined by paramwise_cfg.
-        Args:
-            params (list[dict]): A list of param groups, it will be modified
-                in place.
-            module (nn.Module): The module to be added.
-            prefix (str): The prefix of the module
-            is_dcn_module (int|float|None): If the current module is a
-                submodule of DCN, `is_dcn_module` will be passed to
-                control conv_offset layer's learning rate. Defaults to None.
-        """
+        """Add all parameters of module to the params list."""
         parameter_groups = {}
-        print(self.paramwise_cfg)
+        
+        # In 3.x, paramwise_cfg is accessed via self.paramwise_cfg
         num_layers = self.paramwise_cfg.get('num_layers') + 2
         layer_decay_rate = self.paramwise_cfg.get('layer_decay_rate')
-        print("Build LayerDecayOptimizerConstructor %f - %d" % (layer_decay_rate, num_layers))
+        
+        # base_lr and base_wd are handled by the parent class
         weight_decay = self.base_wd
 
         for name, param in module.named_parameters():
             if not param.requires_grad:
-                continue  # frozen weights
-            if len(param.shape) == 1 or name.endswith(".bias") or name in ('pos_embed', 'cls_token'):
+                continue 
+            
+            # 1. Decide Weight Decay
+            if len(param.shape) == 1 or name.endswith(".bias") or \
+               'pos_embed' in name or 'cls_token' in name:
                 group_name = "no_decay"
                 this_weight_decay = 0.
             else:
                 group_name = "decay"
                 this_weight_decay = weight_decay
 
+            # 2. Get Layer ID and calculate Scale
             layer_id = get_num_layer_for_vit(name, num_layers)
             group_name = "layer_%d_%s" % (layer_id, group_name)
 
             if group_name not in parameter_groups:
+                # LLRD Formula: scale = rate^(max_layers - current_layer - 1)
                 scale = layer_decay_rate ** (num_layers - layer_id - 1)
 
                 parameter_groups[group_name] = {
                     "weight_decay": this_weight_decay,
                     "params": [],
                     "param_names": [], 
-                    "lr_scale": scale, 
-                    "group_name": group_name, 
-                    "lr": scale * self.base_lr, 
+                    "lr_mult": scale, # MMDet 3.x uses lr_mult instead of manual lr calculation
                 }
 
             parameter_groups[group_name]["params"].append(param)
             parameter_groups[group_name]["param_names"].append(name)
+
+        # Optional: Print groups for debugging (Rank 0 only)
         rank, _ = get_dist_info()
         if rank == 0:
-            to_display = {}
-            for key in parameter_groups:
-                to_display[key] = {
-                    "param_names": parameter_groups[key]["param_names"], 
-                    "lr_scale": parameter_groups[key]["lr_scale"], 
-                    "lr": parameter_groups[key]["lr"], 
-                    "weight_decay": parameter_groups[key]["weight_decay"], 
-                }
-            print("Param groups = %s" % json.dumps(to_display, indent=2))
+            print(f"Build LayerDecayOptimizerConstructor: {layer_decay_rate} rate, {num_layers} layers")
         
-        # state_dict = module.state_dict()
-        # for group_name in parameter_groups:
-        #     group = parameter_groups[group_name]
-        #     for name in group["param_names"]:
-        #         group["params"].append(state_dict[name])
         params.extend(parameter_groups.values())
