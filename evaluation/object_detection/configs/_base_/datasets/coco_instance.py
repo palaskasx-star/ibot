@@ -24,8 +24,8 @@ test_pipeline = [
 
 # MMDet 3.x uses separate dataloader dicts
 train_dataloader = dict(
-    batch_size=2,        # replaced samples_per_gpu
-    num_workers=2,       # replaced workers_per_gpu
+    batch_size=8,        # replaced samples_per_gpu
+    num_workers=25,       # replaced workers_per_gpu
     persistent_workers=True,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
