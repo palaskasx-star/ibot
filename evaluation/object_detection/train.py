@@ -45,7 +45,10 @@ def main():
     cfg = Config.fromfile(args.config)
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
-
+        
+    if args.launcher != 'none':
+        cfg.launcher = args.launcher
+        
     # 3. Handle Work Directory
     if args.work_dir is not None:
         cfg.work_dir = args.work_dir
