@@ -8,7 +8,7 @@ _base_ = [
 # Change 'my_custom_modules.tiny_vit' to the actual python path where 
 # you saved the @register_model code.
 custom_imports = dict(
-    imports=['my_custom_modules.tiny_vit'], 
+    imports=['my_custom_modules.tiny_eva'], 
     allow_failed_imports=False
 )
 
